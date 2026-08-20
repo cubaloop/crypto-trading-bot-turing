@@ -213,6 +213,7 @@ class TuringTradingEngine:
                         "take_profit": p.take_profit,
                         "highest_price": p.highest_price,
                         "lowest_price": p.lowest_price,
+                        "profit_lock_stage": getattr(p, 'profit_lock_stage', 0),
                         "opened_at": p.opened_at,
                         "notional_usd": p.notional_usd
                     } for s, p in self.executor.positions.items()
@@ -222,6 +223,7 @@ class TuringTradingEngine:
                     "iteration": self.iteration,
                     "balance": self.executor.balance_usd,
                     "equity": current_equity,
+                    "current_prices": current_prices,
                     "circuit_breaker_active": self.risk_manager.circuit_breaker_triggered,
                     "decayed_sentiment": decayed_score,
                     "active_leverage": self.last_optimal_leverage,

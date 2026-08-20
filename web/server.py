@@ -30,9 +30,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             --gold: #ffd700;
             --purple: #bf00ff;
             --green: #00ff88;
-            --green-glow: rgba(0, 255, 136, 0.18);
+            --green-bright: #39ff14; /* Verde Claro Ultra-Brillante para Locked Profit */
+            --green-glow: rgba(57, 255, 20, 0.25);
             --red: #ff3366;
-            --red-glow: rgba(255, 51, 102, 0.18);
+            --red-glow: rgba(255, 51, 102, 0.20);
         }
 
         :root[data-theme="light"] {
@@ -49,7 +50,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             --gold: #d4a017;
             --purple: #8a00cc;
             --green: #059669;
-            --green-glow: rgba(5, 150, 105, 0.15);
+            --green-bright: #10b981;
+            --green-glow: rgba(16, 185, 129, 0.20);
             --red: #dc2626;
             --red-glow: rgba(220, 38, 38, 0.15);
         }
@@ -203,7 +205,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
             gap: 16px;
         }
 
@@ -247,6 +249,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             font-size: 15px;
             font-weight: 700;
             margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         table {
@@ -279,6 +284,27 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         .badge-buy { background: var(--green-glow); color: var(--green); border: 1px solid var(--green); }
         .badge-sell { background: var(--red-glow); color: var(--red); border: 1px solid var(--red); }
         .badge-lev { background: rgba(255, 215, 0, 0.15); color: var(--gold); border: 1px solid var(--gold); }
+        
+        /* ESTILOS DE GANANCIA BLOQUEADA (LOCKED PROFIT) EN VERDE CLARO BRILLANTE */
+        .badge-locked {
+            background: rgba(57, 255, 20, 0.18);
+            color: var(--green-bright);
+            border: 1px solid var(--green-bright);
+            font-weight: 800;
+            box-shadow: 0 0 10px var(--green-glow);
+            text-shadow: 0 0 6px rgba(57, 255, 20, 0.4);
+        }
+        .badge-be {
+            background: rgba(0, 240, 255, 0.15);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            font-weight: 700;
+        }
+        .badge-open {
+            background: var(--bg-hover);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
     </style>
 </head>
 <body>
@@ -322,6 +348,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <div class="metric-sub mono" id="val-pnl">+0.00% PnL Global</div>
             </div>
             <div class="metric-card">
+                <div class="metric-title">Ganancia Asegurada (Locked Profit)</div>
+                <div class="metric-value mono" style="color: var(--green-bright); text-shadow: 0 0 12px var(--green-glow);" id="val-locked">$0.00</div>
+                <div class="metric-sub mono" style="color: var(--green-bright);" id="val-locked-sub">0 Posiciones Blindadas</div>
+            </div>
+            <div class="metric-card">
                 <div class="metric-title">Apalancamiento Óptimo</div>
                 <div class="metric-value mono" style="color: var(--gold);" id="val-leverage">3.0x</div>
                 <div class="metric-sub">Dinámico Autónomo (1x a 10x)</div>
@@ -339,7 +370,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
 
         <div class="table-card">
-            <h3>Posiciones Abiertas en Tiempo Real (Pares de Alta Volatilidad)</h3>
+            <h3>
+                <span>Posiciones Abiertas en Tiempo Real (Detalle Milimétrico & Trailing)</span>
+                <span class="mono" style="font-size: 12px; color: var(--green-bright);" id="pos-count-badge">0 Activas</span>
+            </h3>
             <table>
                 <thead>
                     <tr class="mono">
@@ -348,12 +382,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <th>Tipo Operación</th>
                         <th>Apalancamiento</th>
                         <th>Precio Entrada</th>
-                        <th>Stop Loss</th>
+                        <th>Precio Actual</th>
+                        <th>PnL Flotante</th>
+                        <th>Stop Loss / Trailing</th>
                         <th>Take Profit (1:4.8)</th>
+                        <th>Estado / Blindaje</th>
                     </tr>
                 </thead>
                 <tbody id="positions-body" class="mono">
-                    <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Escaneando pares de alta volatilidad...</td></tr>
+                    <tr><td colspan="10" style="text-align: center; color: var(--text-muted);">Escaneando pares de alta volatilidad...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -367,13 +404,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <th>Par</th>
                         <th>Lado</th>
                         <th>Apalancamiento</th>
+                        <th>Precio Entrada</th>
+                        <th>Precio Salida</th>
                         <th>PnL Neto</th>
                         <th>Retorno %</th>
                         <th>Motivo de Cierre</th>
                     </tr>
                 </thead>
                 <tbody id="history-body" class="mono">
-                    <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin órdenes cerradas aún.</td></tr>
+                    <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Sin órdenes cerradas aún.</td></tr>
                 </tbody>
             </table>
         </div>
@@ -426,40 +465,88 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     document.getElementById('val-leverage').innerText = data.active_leverage.toFixed(1) + 'x';
                 }
 
+                const currentPrices = data.current_prices || {};
+
+                // Renderizar Posiciones Detalladas
                 const posBody = document.getElementById('positions-body');
                 const posKeys = Object.keys(data.positions || {});
+                document.getElementById('pos-count-badge').innerText = posKeys.length + ' Activas';
+
+                let totalLockedUsd = 0.0;
+                let lockedCount = 0;
+
                 if (posKeys.length > 0) {
                     posBody.innerHTML = posKeys.map(k => {
                         const p = data.positions[k];
+                        const currP = currentPrices[p.symbol] || p.entry_price;
+                        
+                        let unRealizedPnl = 0.0;
+                        let unRealizedPct = 0.0;
+                        if (p.side === 'LONG') {
+                            unRealizedPnl = (currP - p.entry_price) * p.units;
+                            unRealizedPct = ((currP - p.entry_price) / p.entry_price) * (p.leverage || 1.0) * 100;
+                        } else {
+                            unRealizedPnl = (p.entry_price - currP) * p.units;
+                            unRealizedPct = ((p.entry_price - currP) / p.entry_price) * (p.leverage || 1.0) * 100;
+                        }
+
+                        // Cálculo de Locked Profit
+                        let lockedBadge = '<span class="badge badge-open">⏳ ABIERTA</span>';
+                        if (p.profit_lock_stage === 1) {
+                            lockedBadge = '<span class="badge badge-be">🛡️ BREAK-EVEN</span>';
+                        } else if (p.profit_lock_stage === 2) {
+                            const lockedUsd = (p.side === 'LONG' ? (p.stop_loss - p.entry_price) : (p.entry_price - p.stop_loss)) * p.units;
+                            totalLockedUsd += Math.max(0, lockedUsd);
+                            lockedCount++;
+                            lockedBadge = `<span class="badge badge-locked">💎 LOCKED +$${Math.max(0, lockedUsd).toFixed(2)}</span>`;
+                        } else if (p.profit_lock_stage >= 3) {
+                            const lockedUsd = (p.side === 'LONG' ? (p.stop_loss - p.entry_price) : (p.entry_price - p.stop_loss)) * p.units;
+                            totalLockedUsd += Math.max(0, lockedUsd);
+                            lockedCount++;
+                            lockedBadge = `<span class="badge badge-locked">⚡ TRAILING +$${Math.max(0, lockedUsd).toFixed(2)}</span>`;
+                        }
+
+                        const pnlColor = unRealizedPnl >= 0 ? 'var(--green-bright)' : 'var(--red)';
                         const bClass = p.side === 'LONG' ? 'badge-buy' : 'badge-sell';
+
                         return `<tr>
                             <td><strong>${p.symbol}</strong></td>
                             <td><span class="badge ${bClass}">${p.side}</span></td>
                             <td><span style="color: var(--accent); font-weight: 700;">${p.operation_type || 'BREAKOUT'}</span></td>
                             <td><span class="badge badge-lev">${(p.leverage || 3.0).toFixed(1)}x</span></td>
-                            <td>$${p.entry_price.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                            <td style="color: var(--red);">$${p.stop_loss.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                            <td style="color: var(--green);">$${p.take_profit.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td>$${p.entry_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+                            <td style="font-weight: 700;">$${currP.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+                            <td style="color: ${pnlColor}; font-weight: 800;">${unRealizedPnl >= 0 ? '+' : ''}$${unRealizedPnl.toFixed(2)} (${unRealizedPct >= 0 ? '+' : ''}${unRealizedPct.toFixed(2)}%)</td>
+                            <td style="color: var(--red);">$${p.stop_loss.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+                            <td style="color: var(--green);">$${p.take_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 4})}</td>
+                            <td>${lockedBadge}</td>
                         </tr>`;
                     }).join('');
                 } else {
-                    posBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin posiciones abiertas. Buscando confluencia cuántica...</td></tr>';
+                    posBody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: var(--text-muted);">Sin posiciones abiertas. Buscando confluencia cuántica...</td></tr>';
                 }
 
+                // Actualizar Métrica de Locked Profit en Verde Brillante
+                document.getElementById('val-locked').innerText = '+$' + totalLockedUsd.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('val-locked-sub').innerText = lockedCount + ' Posiciones con Ganancia Blindada';
+
+                // Historial Detallado
                 const histBody = document.getElementById('history-body');
                 const trades = data.trade_history || [];
                 if (trades.length > 0) {
-                    histBody.innerHTML = trades.slice(-10).reverse().map(t => {
+                    histBody.innerHTML = trades.slice(-12).reverse().map(t => {
                         const bClass = t.side === 'LONG' ? 'badge-buy' : 'badge-sell';
                         const pnlVal = parseFloat(t.net_pnl || 0);
-                        const pnlCol = pnlVal >= 0 ? 'var(--green)' : 'var(--red)';
+                        const pnlCol = pnlVal >= 0 ? 'var(--green-bright)' : 'var(--red)';
                         return `<tr>
                             <td>${t.id}</td>
                             <td><strong>${t.symbol}</strong></td>
                             <td><span class="badge ${bClass}">${t.side}</span></td>
                             <td><span class="badge badge-lev">${(t.leverage || 3.0).toFixed(1)}x</span></td>
-                            <td style="color: ${pnlCol}; font-weight: 700;">${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}</td>
-                            <td style="color: ${pnlCol};">${((t.return_pct || 0) * 100).toFixed(2)}%</td>
+                            <td>$${(t.entry_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td>$${(t.exit_price || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td style="color: ${pnlCol}; font-weight: 800;">${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}</td>
+                            <td style="color: ${pnlCol}; font-weight: 700;">${((t.return_pct || 0) * 100).toFixed(2)}%</td>
                             <td>${t.reason || 'EXIT'}</td>
                         </tr>`;
                     }).join('');

@@ -50,12 +50,13 @@ class TuringTradingEngine:
             max_daily_drawdown_pct=config.max_daily_drawdown_pct
         )
         
-        binance_key = os.getenv("BINANCE_TESTNET_API_KEY", "LyS7ZwuG771PRgZSD7T2AoidqJ8FIGnHUrOElsphYMTZg7BQtgkvt8PTEO95zFXX")
-        binance_secret = os.getenv("BINANCE_TESTNET_API_SECRET", "EVWlkCZIJAYRe8bgw7Xu7hRamRqjyWxgEms0zzKTPkHwKTU0ALJxUKSJwUhb7gy6")
-        if binance_key and binance_secret:
-            logger.info("👑 Conectando KuQuant TURING a Binance Futures Testnet Oficial (testnet.binancefuture.com)")
+        if config.mode.lower() in ["live", "testnet", "binance"] and os.getenv("BINANCE_TESTNET_API_KEY"):
+            binance_key = os.getenv("BINANCE_TESTNET_API_KEY")
+            binance_secret = os.getenv("BINANCE_TESTNET_API_SECRET")
+            logger.info("👑 Conectando KuQuant TURING a Binance Futures Testnet Oficial")
             self.executor = BinanceTestnetExecutorTuring(api_key=binance_key, secret=binance_secret, default_leverage=3)
         else:
+            logger.info("👑 Activando Motor Cuántico de Alta Velocidad TURING (10k Base Fluida)")
             self.executor = PaperExecutor(initial_balance_usd=config.initial_virtual_balance)
             
         self.web_server = TuringDashboardServer(

@@ -29,6 +29,7 @@ from ai.meta_learner import TuringMetaLearner
 from ai.episodic_memory import EpisodicMemoryEngine, MarketVector
 from risk.risk_manager import TuringRiskManager
 from execution.executor import PaperExecutor
+from execution.binance_testnet_executor import BinanceTestnetExecutorTuring
 from web.server import TuringDashboardServer
 
 class TuringTradingEngine:
@@ -48,7 +49,15 @@ class TuringTradingEngine:
             risk_per_trade_pct=config.risk_per_trade_pct,
             max_daily_drawdown_pct=config.max_daily_drawdown_pct
         )
-        self.executor = PaperExecutor(initial_balance_usd=config.initial_virtual_balance)
+        
+        binance_key = os.getenv("BINANCE_TESTNET_API_KEY", "LyS7ZwuG771PRgZSD7T2AoidqJ8FIGnHUrOElsphYMTZg7BQtgkvt8PTEO95zFXX")
+        binance_secret = os.getenv("BINANCE_TESTNET_API_SECRET", "EVWlkCZIJAYRe8bgw7Xu7hRamRqjyWxgEms0zzKTPkHwKTU0ALJxUKSJwUhb7gy6")
+        if binance_key and binance_secret:
+            logger.info("👑 Conectando KuQuant TURING a Binance Futures Testnet Oficial (testnet.binancefuture.com)")
+            self.executor = BinanceTestnetExecutorTuring(api_key=binance_key, secret=binance_secret, default_leverage=3)
+        else:
+            self.executor = PaperExecutor(initial_balance_usd=config.initial_virtual_balance)
+            
         self.web_server = TuringDashboardServer(
             host=config.host,
             port=config.port,
@@ -72,6 +81,12 @@ class TuringTradingEngine:
         logger.info("=================================================================")
 
         await self.market_stream.initialize()
+        if hasattr(self.executor, 'initialize'):
+            await self.executor.initialize()
+            if hasattr(self.executor, 'initial_balance') and self.executor.initial_balance > 0:
+                self.risk_manager.initial_balance = self.executor.initial_balance
+                self.risk_manager.peak_equity = self.executor.initial_balance
+                self.meta_learner.peak_equity = self.executor.initial_balance
         await self.web_server.start()
         self.keep_alive.start()
 
@@ -164,10 +179,16 @@ class TuringTradingEngine:
                                     f"👑 [SEÑAL TURING APROBADA] en {symbol}: {signal.action} "
                                     f"({signal.leverage:.1f}x LEV | {signal.operation_type}) | {signal.reason}"
                                 )
-                                self.executor.execute_signal(signal, units)
+                                if asyncio.iscoroutinefunction(self.executor.execute_signal):
+                                    await self.executor.execute_signal(signal, units)
+                                else:
+                                    self.executor.execute_signal(signal, units)
 
                 # 4. Trailing Ratchet Milimétrico y Cierre de Órdenes
-                self.executor.update_and_check_exits(current_prices)
+                if asyncio.iscoroutinefunction(self.executor.update_and_check_exits):
+                    await self.executor.update_and_check_exits(current_prices)
+                else:
+                    self.executor.update_and_check_exits(current_prices)
 
                 # 5. Consolidación de Experiencia en Disco
                 if len(self.executor.trade_history) > self._last_known_trade_count:

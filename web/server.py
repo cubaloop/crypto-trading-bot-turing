@@ -1,0 +1,321 @@
+import asyncio
+import json
+import logging
+from aiohttp import web
+from typing import Dict, Set
+
+logger = logging.getLogger("WebServerTuring")
+
+DASHBOARD_HTML = """<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KuQuant TURING (The Apex Quantum General) • Tier 1 Neural Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root[data-theme="dark"] {
+            --bg-base: #06090e;
+            --bg-card: #0d121d;
+            --bg-hover: #151d2e;
+            --border: #1f293d;
+            --border-light: #2c3b57;
+            --text-primary: #ffffff;
+            --text-secondary: #9aa8bd;
+            --text-muted: #62718a;
+            --accent: #00f0ff; /* Turing Cyan */
+            --accent-glow: rgba(0, 240, 255, 0.25);
+            --gold: #ffd700;
+            --green: #00ff88;
+            --green-glow: rgba(0, 255, 136, 0.2);
+            --red: #ff3366;
+            --red-glow: rgba(255, 51, 102, 0.2);
+            --purple: #bf00ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 240, 255, 0.08);
+        }
+
+        .brand { display: flex; align-items: center; gap: 16px; }
+        .brand-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        .brand h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+        .brand span { font-size: 12px; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-label { font-size: 13px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-val { font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+        .card-sub { font-size: 12px; color: var(--text-muted); }
+
+        .neural-box {
+            background: linear-gradient(180deg, rgba(13, 18, 29, 0.9), rgba(6, 9, 14, 0.95));
+            border: 1px solid var(--accent);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.1);
+        }
+
+        .neural-header { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: center; }
+        .neural-title { color: var(--accent); font-weight: 700; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .neural-msg { font-size: 14px; font-family: 'JetBrains Mono', monospace; color: #e2e8f0; line-height: 1.6; }
+
+        .table-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            overflow-x: auto;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+        th { text-align: left; padding: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; }
+        td { padding: 14px 12px; border-bottom: 1px solid var(--border); }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .badge-buy { background: var(--green-glow); color: var(--green); border: 1px solid var(--green); }
+        .badge-sell { background: var(--red-glow); color: var(--red); border: 1px solid var(--red); }
+        .badge-lev { background: rgba(255, 215, 0, 0.15); color: var(--gold); border: 1px solid var(--gold); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="brand">
+                <div class="brand-icon">👑</div>
+                <div>
+                    <h1>KuQuant TURING • Tier 1 Apex Quantum General</h1>
+                    <span>FÍSICA CUÁNTICA + TEORÍA DE CUERDAS + ISING SPIN GLASS + APALANCAMIENTO 10X</span>
+                </div>
+            </div>
+            <div id="live-status" style="color: var(--green); font-weight: 700; font-family: 'JetBrains Mono', monospace;">● EN VIVO 24/7</div>
+        </header>
+
+        <div class="neural-box">
+            <div class="neural-header">
+                <div class="neural-title">🧠 Auto-Conciencia & Stream Neuronal Introspectivo</div>
+                <div style="font-size: 11px; color: var(--text-muted);" id="turing-cycle">Ciclo #0</div>
+            </div>
+            <div class="neural-msg" id="turing-thought">Cargando tensores de física teórica y banco de memoria...</div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="card">
+                <div class="card-label">Balance / Equity Total</div>
+                <div class="card-val" id="val-equity">$10,000.00</div>
+                <div class="card-sub" id="val-pnl">+0.00% Rendimiento</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Apalancamiento Óptimo</div>
+                <div class="card-val" style="color: var(--gold);" id="val-leverage">3.0x</div>
+                <div class="card-sub">Dinámico Autónomo (1x a 10x)</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Modelo de Ising (Magnetización)</div>
+                <div class="card-val" style="color: var(--accent);" id="val-ising">0.00 M</div>
+                <div class="card-sub" id="val-chi">Susceptibilidad Chi: 0.00</div>
+            </div>
+            <div class="card">
+                <div class="card-label">Entropía Cuántica L2</div>
+                <div class="card-val" style="color: var(--purple);" id="val-entropy">0.30 S</div>
+                <div class="card-sub" id="val-hurst">Hurst Rugoso: H ~ 0.10</div>
+            </div>
+        </div>
+
+        <div class="table-box">
+            <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 700;">Posiciones Abiertas en Tiempo Real</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Par</th>
+                        <th>Lado</th>
+                        <th>Tipo Operación</th>
+                        <th>Apalancamiento</th>
+                        <th>Precio Entrada</th>
+                        <th>Stop Loss</th>
+                        <th>Take Profit (1:4.8)</th>
+                    </tr>
+                </thead>
+                <tbody id="positions-body">
+                    <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Escaneando pares de alta volatilidad...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-box">
+            <h3 style="margin-bottom: 16px; font-size: 16px; font-weight: 700;">Historial de Órdenes y Experiencia Consolidada</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Par</th>
+                        <th>Lado</th>
+                        <th>Apalancamiento</th>
+                        <th>PnL Neto</th>
+                        <th>Retorno %</th>
+                        <th>Motivo de Cierre</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin órdenes cerradas aún.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const eq = parseFloat(data.equity || 10000.0);
+                const pnl = ((eq - 10000.0) / 10000.0) * 100;
+                document.getElementById('val-equity').innerText = '$' + eq.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('val-pnl').innerText = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '% PnL Global';
+                document.getElementById('val-pnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+                document.getElementById('turing-cycle').innerText = 'Ciclo #' + (data.iteration || 0);
+                if (data.reflection_message) {
+                    document.getElementById('turing-thought').innerText = data.reflection_message;
+                }
+
+                if (data.active_leverage) {
+                    document.getElementById('val-leverage').innerText = data.active_leverage.toFixed(1) + 'x';
+                }
+
+                // Posiciones
+                const posBody = document.getElementById('positions-body');
+                const posKeys = Object.keys(data.positions || {});
+                if (posKeys.length > 0) {
+                    posBody.innerHTML = posKeys.map(k => {
+                        const p = data.positions[k];
+                        const bClass = p.side === 'LONG' ? 'badge-buy' : 'badge-sell';
+                        return `<tr>
+                            <td><strong>${p.symbol}</strong></td>
+                            <td><span class="badge ${bClass}">${p.side}</span></td>
+                            <td><span style="color: var(--accent);">${p.operation_type || 'BREAKOUT'}</span></td>
+                            <td><span class="badge badge-lev">${(p.leverage || 3.0).toFixed(1)}x</span></td>
+                            <td>$${p.entry_price.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td style="color: var(--red);">$${p.stop_loss.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                            <td style="color: var(--green);">$${p.take_profit.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    posBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin posiciones abiertas. Buscando confluencia cuántica...</td></tr>';
+                }
+
+                // Historial
+                const histBody = document.getElementById('history-body');
+                const trades = data.trade_history || [];
+                if (trades.length > 0) {
+                    histBody.innerHTML = trades.slice(-8).reverse().map(t => {
+                        const bClass = t.side === 'LONG' ? 'badge-buy' : 'badge-sell';
+                        const pnlVal = parseFloat(t.net_pnl || 0);
+                        const pnlCol = pnlVal >= 0 ? 'var(--green)' : 'var(--red)';
+                        return `<tr>
+                            <td>${t.id}</td>
+                            <td><strong>${t.symbol}</strong></td>
+                            <td><span class="badge ${bClass}">${t.side}</span></td>
+                            <td><span class="badge badge-lev">${(t.leverage || 3.0).toFixed(1)}x</span></td>
+                            <td style="color: ${pnlCol}; font-weight: 700;">${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}</td>
+                            <td style="color: ${pnlCol};">${((t.return_pct || 0) * 100).toFixed(2)}%</td>
+                            <td>${t.reason || 'EXIT'}</td>
+                        </tr>`;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        setInterval(fetchStatus, 1000);
+        fetchStatus();
+    </script>
+</body>
+</html>
+"""
+
+class TuringDashboardServer:
+    def __init__(self, host: str = "0.0.0.0", port: int = 8000, on_reset_circuit_breaker=None):
+        self.host = host
+        self.port = port
+        self.on_reset_circuit_breaker = on_reset_circuit_breaker
+        self.app = web.Application()
+        self.runner = None
+        self.site = None
+        self.latest_state = {}
+
+        self.app.router.add_get('/', self.handle_index)
+        self.app.router.add_get('/api/status', self.handle_status)
+        self.app.router.add_post('/api/reset-cb', self.handle_reset_cb)
+
+    async def handle_index(self, request):
+        return web.Response(text=DASHBOARD_HTML, content_type='text/html')
+
+    async def handle_status(self, request):
+        return web.json_response(self.latest_state)
+
+    async def handle_reset_cb(self, request):
+        if self.on_reset_circuit_breaker:
+            self.on_reset_circuit_breaker()
+        return web.json_response({"status": "success", "message": "Circuit breaker TURING reiniciado"})
+
+    async def broadcast_state(self, state: Dict):
+        self.latest_state = state
+
+    async def start(self):
+        self.runner = web.AppRunner(self.app)
+        await self.runner.setup()
+        self.site = web.TCPSite(self.runner, self.host, self.port)
+        await self.site.start()
+        logger.info(f"👑 [DASHBOARD TURING DISPONIBLE EN]: http://localhost:{self.port}")
+
+    async def stop(self):
+        if self.site:
+            await self.site.stop()
+        if self.runner:
+            await self.runner.cleanup()

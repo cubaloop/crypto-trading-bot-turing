@@ -23,6 +23,7 @@ class LiveTuringPosition:
     profit_lock_stage: int
     opened_at: float
     notional_usd: float
+    atr: float
 
 class BinanceTestnetExecutorTuring:
     def __init__(self, api_key: str, secret: str, default_leverage: int = 3):
@@ -38,17 +39,17 @@ class BinanceTestnetExecutorTuring:
         self.exchange.set_sandbox_mode(True)
         self.positions: Dict[str, LiveTuringPosition] = {}
         self.trade_history: List[Dict] = []
-        self.balance_usd: float = 5000.0
-        self.initial_balance: float = 5000.0
+        self.balance_usd: float = 4923.84
+        self.initial_balance: float = 4923.84
         self._order_counter = 0
 
     async def initialize(self):
         try:
             await self.exchange.load_markets()
             bal = await self.exchange.fetch_balance()
-            self.balance_usd = float(bal['total'].get('USDT', 5000.0))
+            self.balance_usd = float(bal['total'].get('USDT', 4923.84))
             self.initial_balance = self.balance_usd
-            logger.info(f"⚡ [TURING BINANCE TESTNET CONECTADO] Balance Oficial en Vivo: ${self.balance_usd:,.2f} USDT")
+            logger.info(f"⚡ [TURING BINANCE INSTITUCIONAL CONECTADO] Balance Oficial: ${self.balance_usd:,.2f} USDT")
         except Exception as e:
             logger.error(f"Error inicializando Binance Testnet en TURING: {e}")
 
@@ -61,28 +62,30 @@ class BinanceTestnetExecutorTuring:
         lev = int(round(signal.leverage or self.default_leverage))
 
         try:
+            # 1. Filtro de Spread Institucional (< 0.035%)
+            try:
+                ticker = await self.exchange.fetch_ticker(market_symbol)
+                bid = float(ticker.get('bid', signal.entry_price))
+                ask = float(ticker.get('ask', signal.entry_price))
+                if bid > 0 and ask > 0:
+                    spread_pct = (ask - bid) / bid
+                    if spread_pct > 0.00035:
+                        logger.warning(f"🛑 [TURING SPREAD FILTER] Spread amplio ({spread_pct:.4%}). Esperando compresión.")
+                        return None
+            except Exception:
+                pass
+
             try:
                 await self.exchange.set_leverage(lev, market_symbol)
             except Exception:
                 pass
 
-            # Control estricto de margen disponible (máx 35% por posición)
-            max_safe_notional = self.balance_usd * (lev * 0.35)
+            # 2. Control de Margen Aislado Seguro (Máximo $800 USDT notional por trade)
+            max_safe_notional = min(800.0, self.balance_usd * (lev * 0.15))
             if (units * signal.entry_price) > max_safe_notional:
                 units = max_safe_notional / signal.entry_price
 
-            # Precisión por par
-            if "BTC" in signal.symbol:
-                amount_formatted = round(units, 3)
-            elif "ETH" in signal.symbol:
-                amount_formatted = round(units, 2)
-            elif "SOL" in signal.symbol:
-                amount_formatted = round(units, 1)
-            elif "DOGE" in signal.symbol:
-                amount_formatted = round(units, 0)
-            else:
-                amount_formatted = round(units, 1)
-
+            amount_formatted = round(units, 1)
             if amount_formatted <= 0:
                 return None
 
@@ -104,7 +107,7 @@ class BinanceTestnetExecutorTuring:
                 id=pos_id,
                 symbol=signal.symbol,
                 side="LONG" if signal.action == "BUY" else "SHORT",
-                operation_type=getattr(signal, 'operation_type', 'MOMENTUM_BREAKOUT'),
+                operation_type=getattr(signal, 'operation_type', 'QUANTUM_GENERAL'),
                 leverage=float(lev),
                 entry_price=fill_price,
                 units=actual_units,
@@ -114,11 +117,12 @@ class BinanceTestnetExecutorTuring:
                 lowest_price=fill_price,
                 profit_lock_stage=0,
                 opened_at=time.time(),
-                notional_usd=notional
+                notional_usd=notional,
+                atr=getattr(signal, 'atr', fill_price * 0.008)
             )
             self.positions[signal.symbol] = pos
             logger.info(
-                f"👑 [ORDEN REAL EN BINANCE FUTURES TURING] {signal.action} {actual_units} {signal.symbol} @ ${fill_price:,.2f} "
+                f"👑 [ORDEN REAL BINANCE TURING] {signal.action} {actual_units} {signal.symbol} @ ${fill_price:,.2f} "
                 f"({lev}x LEV | {pos.operation_type}) | ID: {pos_id}"
             )
             return pos
@@ -149,18 +153,21 @@ class BinanceTestnetExecutorTuring:
 
             should_close = False
             reason = ""
+            atr_pct = (pos.atr / pos.entry_price) if pos.entry_price > 0 else 0.008
+            hurdle_be = max(0.0045, 1.1 * atr_pct)
 
-            # Hyper-Chandelier Trailing Ratchet
+            # Hyper-Chandelier Trailing Ratchet con Calibración Dinámica de Fricción
             if pos.side == "LONG":
                 peak_gain = (pos.highest_price - pos.entry_price) / pos.entry_price
-                if peak_gain >= 0.0035 and pos.profit_lock_stage < 1:
-                    pos.stop_loss = max(pos.stop_loss, pos.entry_price * 1.001)
+                if peak_gain >= hurdle_be and pos.profit_lock_stage < 1:
+                    # Break-even cubre comisiones de exchange (+0.12% neto asegurado)
+                    pos.stop_loss = max(pos.stop_loss, pos.entry_price * 1.0012)
                     pos.profit_lock_stage = 1
-                if peak_gain >= 0.0070 and pos.profit_lock_stage < 2:
-                    pos.stop_loss = max(pos.stop_loss, pos.entry_price * 1.0045)
+                if peak_gain >= (hurdle_be * 1.6) and pos.profit_lock_stage < 2:
+                    pos.stop_loss = max(pos.stop_loss, pos.entry_price * 1.0050)
                     pos.profit_lock_stage = 2
-                if peak_gain >= 0.015:
-                    trailing_sl = pos.highest_price * 0.997
+                if peak_gain >= (hurdle_be * 2.5):
+                    trailing_sl = pos.highest_price * (1.0 - (0.5 * atr_pct))
                     if trailing_sl > pos.stop_loss:
                         pos.stop_loss = trailing_sl
                         pos.profit_lock_stage = 3
@@ -174,14 +181,14 @@ class BinanceTestnetExecutorTuring:
 
             elif pos.side == "SHORT":
                 peak_gain = (pos.entry_price - pos.lowest_price) / pos.entry_price
-                if peak_gain >= 0.0035 and pos.profit_lock_stage < 1:
-                    pos.stop_loss = min(pos.stop_loss, pos.entry_price * 0.999)
+                if peak_gain >= hurdle_be and pos.profit_lock_stage < 1:
+                    pos.stop_loss = min(pos.stop_loss, pos.entry_price * 0.9988)
                     pos.profit_lock_stage = 1
-                if peak_gain >= 0.0070 and pos.profit_lock_stage < 2:
-                    pos.stop_loss = min(pos.stop_loss, pos.entry_price * 0.9955)
+                if peak_gain >= (hurdle_be * 1.6) and pos.profit_lock_stage < 2:
+                    pos.stop_loss = min(pos.stop_loss, pos.entry_price * 0.9950)
                     pos.profit_lock_stage = 2
-                if peak_gain >= 0.015:
-                    trailing_sl = pos.lowest_price * 1.003
+                if peak_gain >= (hurdle_be * 2.5):
+                    trailing_sl = pos.lowest_price * (1.0 + (0.5 * atr_pct))
                     if trailing_sl < pos.stop_loss:
                         pos.stop_loss = trailing_sl
                         pos.profit_lock_stage = 3
@@ -209,7 +216,8 @@ class BinanceTestnetExecutorTuring:
                 symbol=market_symbol,
                 type='market',
                 side=close_side,
-                amount=pos.units
+                amount=pos.units,
+                params={'reduceOnly': True}
             )
             raw_p = order.get('average') or order.get('price') or exit_price
             real_exit = float(raw_p) if raw_p else exit_price
@@ -234,7 +242,7 @@ class BinanceTestnetExecutorTuring:
             }
             self.trade_history.append(closed_trade)
             del self.positions[symbol]
-            logger.info(f"🏆 [POSICIÓN CERRADA EN BINANCE TESTNET TURING] {symbol} | PnL: ${pnl:+,.2f} | Motivo: {reason}")
+            logger.info(f"🏆 [POSICIÓN CERRADA REAL BINANCE TURING] {symbol} | PnL: ${pnl:+,.2f} | Motivo: {reason}")
         except Exception as e:
             logger.error(f"Error cerrando posición en Binance Testnet para TURING: {e}")
 

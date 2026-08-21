@@ -44,16 +44,17 @@ class TuringTradingEngine:
         )
         self.meta_learner = TuringMetaLearner()
         self.memory_engine = EpisodicMemoryEngine()
-        self.risk_manager = TuringRiskManager(
-            initial_balance=getattr(self.executor, 'initial_balance', 4923.84),
-            risk_per_trade_pct=config.risk_per_trade_pct,
-            max_daily_drawdown_pct=config.max_daily_drawdown_pct
-        )
         
         binance_key = os.getenv("BINANCE_TESTNET_API_KEY", "LyS7ZwuG771PRgZSD7T2AoidqJ8FIGnHUrOElsphYMTZg7BQtgkvt8PTEO95zFXX")
         binance_secret = os.getenv("BINANCE_TESTNET_API_SECRET", "EVWlkCZIJAYRe8bgw7Xu7hRamRqjyWxgEms0zzKTPkHwKTU0ALJxUKSJwUhb7gy6")
         logger.info("👑 Conectando KuQuant TURING a Binance Futures Testnet Oficial (testnet.binancefuture.com)")
         self.executor = BinanceTestnetExecutorTuring(api_key=binance_key, secret=binance_secret, default_leverage=3)
+
+        self.risk_manager = TuringRiskManager(
+            initial_balance=getattr(self.executor, 'initial_balance', 4923.84),
+            risk_per_trade_pct=config.risk_per_trade_pct,
+            max_daily_drawdown_pct=config.max_daily_drawdown_pct
+        )
             
         self.web_server = TuringDashboardServer(
             host=config.host,

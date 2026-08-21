@@ -241,6 +241,7 @@ class TuringTradingEngine:
                     "iteration": self.iteration,
                     "balance": self.executor.balance_usd,
                     "equity": current_equity,
+                    "initial_balance": getattr(self.executor, "initial_balance", 4923.84),
                     "current_prices": current_prices,
                     "circuit_breaker_active": self.risk_manager.circuit_breaker_triggered,
                     "decayed_sentiment": decayed_score,

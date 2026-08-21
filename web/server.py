@@ -451,7 +451,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 const data = await res.json();
 
                 const eq = parseFloat(data.equity || 10000.0);
-                const pnl = ((eq - 10000.0) / 10000.0) * 100;
+                const pnl = ((eq - (parseFloat(data.initial_balance) || eq)) / (parseFloat(data.initial_balance) || eq)) * 100;
                 document.getElementById('val-equity').innerText = '$' + eq.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('val-pnl').innerText = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '% PnL Global';
                 document.getElementById('val-pnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';

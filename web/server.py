@@ -576,6 +576,7 @@ class TuringDashboardServer:
         self.app.router.add_get('/', self.handle_index)
         self.app.router.add_get('/api/status', self.handle_status)
         self.app.router.add_post('/api/reset-cb', self.handle_reset_cb)
+        self.app.router.add_post('/api/sentinel-push', self.handle_sentinel_push)
 
     async def handle_index(self, request):
         return web.Response(text=DASHBOARD_HTML, content_type='text/html')
@@ -587,6 +588,15 @@ class TuringDashboardServer:
         if self.on_reset_circuit_breaker:
             self.on_reset_circuit_breaker()
         return web.json_response({"status": "success", "message": "Circuit breaker TURING reiniciado"})
+
+    async def handle_sentinel_push(self, request):
+        try:
+            alert = await request.json()
+            if hasattr(self, 'on_sentinel_push') and self.on_sentinel_push:
+                await self.on_sentinel_push(alert)
+            return web.json_response({"status": "received", "timestamp": alert.get("timestamp")})
+        except Exception as e:
+            return web.json_response({"status": "error", "message": str(e)}, status=400)
 
     async def broadcast_state(self, state: Dict):
         self.latest_state = state

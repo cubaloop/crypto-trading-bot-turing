@@ -8,13 +8,9 @@ class TuringSettings(BaseModel):
     mode: str = os.getenv("MODE", "paper")  # 'paper' o 'live'
     exchange_id: str = os.getenv("EXCHANGE_ID", "kucoin")
     
-    # Pares de Alta Volatilidad / High Beta
+    # Par Dedicado de Alta Volatilidad
     symbols: List[str] = [
-        "SOL/USDT",   # Alta volatilidad / Beta líder
-        "DOGE/USDT",  # Alta bursatilidad retail e institucional
-        "BTC/USDT",   # Guía macro y sensor Lead-Lag
-        "ETH/USDT",   # Alta liquidez
-        "NEAR/USDT"   # Alta velocidad de breakout
+        "SOL/USDT"
     ]
     timeframe: str = "1m"
     

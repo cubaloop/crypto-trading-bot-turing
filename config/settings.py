@@ -39,7 +39,7 @@ class TuringSettings(BaseModel):
     
     # Conectividad y Web
     host: str = os.getenv("HOST", "0.0.0.0")
-    port: int = int(os.getenv("PORT", "8005"))
+    port: int = int(os.getenv("PORT", "8007"))
     price_poll_interval_seconds: float = 0.40  # 400ms ultra-rápido
 
 config = TuringSettings()

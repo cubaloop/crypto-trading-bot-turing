@@ -45,7 +45,7 @@ class TuringTradingEngine:
         self.meta_learner = TuringMetaLearner()
         self.memory_engine = EpisodicMemoryEngine()
         self.risk_manager = TuringRiskManager(
-            initial_balance=config.initial_virtual_balance,
+            initial_balance=getattr(self.executor, 'initial_balance', 4923.84),
             risk_per_trade_pct=config.risk_per_trade_pct,
             max_daily_drawdown_pct=config.max_daily_drawdown_pct
         )
@@ -71,7 +71,7 @@ class TuringTradingEngine:
     async def initialize(self):
         logger.info("=================================================================")
         logger.info("👑 INICIANDO BOT AUTÓNOMO KUQUANT TURING • TIER 1 QUANTUM GENERAL")
-        logger.info(f"Modo: [{config.mode.upper()}] (Capital Virtual: ${config.initial_virtual_balance:,.2f})")
+        logger.info(f"Modo: [{config.mode.upper()}] (Capital Virtual: ${getattr(self.executor, 'initial_balance', 4923.84):,.2f})")
         logger.info(f"Pares Monitoreados: {', '.join(config.symbols)}")
         logger.info(f"Riesgo Agresivo: {config.risk_per_trade_pct:.1%} | Apalancamiento Dinámico: {config.min_leverage}x a {config.max_leverage}x")
         logger.info("Física: Teoría de Cuerdas + Ising Magnetization + Von Neumann Entropy + Memoria Episódica")
@@ -241,7 +241,7 @@ class TuringTradingEngine:
                     "iteration": self.iteration,
                     "balance": self.executor.balance_usd,
                     "equity": current_equity,
-                    "initial_balance": getattr(self.executor, "initial_balance", 4923.84),
+                    "initial_balance": getattr(self.executor, 'initial_balance', 4923.84),
                     "current_prices": current_prices,
                     "circuit_breaker_active": self.risk_manager.circuit_breaker_triggered,
                     "decayed_sentiment": decayed_score,

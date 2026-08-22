@@ -12,9 +12,9 @@ logger = logging.getLogger("TuringStrategy")
 class TuringTradeSignal:
     symbol: str
     action: str  # "BUY", "SELL", "HOLD"
-    operation_type: str  # "QUANTUM_AVALANCHE", "SNIPER_PULLBACK", "LEAD_LAG_SURGE", "LÉVY_BREAKOUT"
+    operation_type: str
     conviction: float  # -1.0 a +1.0
-    leverage: float    # 1.0x a 10.0x
+    leverage: float    # 1.0x a 10.0x (Inversamente proporcional a la volatilidad)
     entry_price: float
     stop_loss: float
     take_profit: float
@@ -31,21 +31,23 @@ class TuringStrategy:
         lookback_window: int = 20,
         atr_window: int = 14,
         signal_threshold: float = 0.26,
-        vpin_cutoff: float = 0.55,
-        max_entropy_cutoff: float = 0.88
+        vpin_cutoff: float = 0.65,
+        max_entropy_cutoff: float = 0.88,
+        target_risk_pct: float = 0.035  # 3.5% de riesgo normalizado por volatilidad
     ):
         self.lookback_window = lookback_window
         self.atr_window = atr_window
         self.signal_threshold = signal_threshold
         self.vpin_cutoff = vpin_cutoff
         self.max_entropy_cutoff = max_entropy_cutoff
+        self.target_risk_pct = target_risk_pct
 
     def compute_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         if len(df) < self.lookback_window:
             return df
 
-        # 1. ATR Cuántico
+        # 1. ATR Robusto (14 períodos)
         high_low = df['high'] - df['low']
         high_close = (df['high'] - df['close'].shift(1)).abs()
         low_close = (df['low'] - df['close'].shift(1)).abs()
@@ -62,7 +64,7 @@ class TuringStrategy:
         zlema_fast = df['close'] + (df['close'] - df['close'].shift(lag))
         df['zlema_fast'] = zlema_fast.ewm(span=5, adjust=False).mean()
 
-        # 4. RSI Instantáneo (7 períodos para alta velocidad)
+        # 4. RSI Instantáneo (7 períodos)
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=7).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=7).mean()
@@ -82,6 +84,7 @@ class TuringStrategy:
         has_black_swan: bool = False
     ) -> TuringTradeSignal:
         atr_fallback = snapshot.last_price * 0.010
+        hurst_val = getattr(snapshot, 'hurst_exponent', 0.50)
 
         if has_black_swan:
             return TuringTradeSignal(
@@ -95,7 +98,7 @@ class TuringStrategy:
                 take_profit=snapshot.last_price * 0.90,
                 atr=atr_fallback,
                 vpin=snapshot.vpin,
-                hurst=snapshot.hurst_exponent,
+                hurst=hurst_val,
                 entropy=1.0,
                 ising_chi=snapshot.ising_susceptibility,
                 reason="🚨 TURING EMERGENCY PURGE: Cisne Negro Detectado"
@@ -113,63 +116,51 @@ class TuringStrategy:
                 take_profit=snapshot.last_price + (5.0 * atr_fallback),
                 atr=atr_fallback,
                 vpin=snapshot.vpin,
-                hurst=snapshot.hurst_exponent,
+                hurst=hurst_val,
                 entropy=snapshot.entropy,
                 ising_chi=snapshot.ising_susceptibility,
-                reason="Inicializando tensores cuánticos TURING"
-            )
-
-        # 1. Filtros de Toxicidad y Caos
-        if snapshot.vpin >= self.vpin_cutoff:
-            return TuringTradeSignal(
-                symbol=snapshot.symbol,
-                action="HOLD",
-                operation_type="VPIN_BLOCK",
-                conviction=0.0,
-                leverage=1.0,
-                entry_price=snapshot.last_price,
-                stop_loss=snapshot.last_price - (1.8 * atr_fallback),
-                take_profit=snapshot.last_price + (5.0 * atr_fallback),
-                atr=atr_fallback,
-                vpin=snapshot.vpin,
-                hurst=snapshot.hurst_exponent,
-                entropy=snapshot.entropy,
-                ising_chi=snapshot.ising_susceptibility,
-                reason=f"🛑 BLOQUEO VPIN TÓXICO ({snapshot.vpin:.2f} >= {self.vpin_cutoff:.2f})"
+                reason="Inicializando tensores matemáticos TURING"
             )
 
         df = self.compute_indicators(ohlcv_df)
         latest = df.iloc[-1]
         atr = latest.get('atr_14', atr_fallback)
         atr = max(atr, snapshot.last_price * 0.005)
+        atr_pct = atr / max(1.0, snapshot.last_price)
 
         ema_9 = latest.get('ema_9', snapshot.last_price)
         ema_20 = latest.get('ema_20', snapshot.last_price)
         ema_50 = latest.get('ema_50', snapshot.last_price)
         rsi_7 = latest.get('rsi_7', 50.0)
 
-        # === 5 PILARES MATEMÁTICOS DE TURING ===
-        # Pilar 1: Tendencia Fractal Multitemporal
-        trend_bullish = snapshot.last_price >= ema_20 or ema_9 >= ema_20
-        s_trend = 0.85 if trend_bullish else -0.85
+        # ======================================================================
+        # REFACTORIZACIÓN AUDITORÍA: 5 PILARES CONTINUOS Y ORTOGONALES
+        # ======================================================================
+        
+        # 1. Pilar 1: Tendencia Continua (Distancia normalizada por ATR)
+        dist_ema20 = (snapshot.last_price - ema_20) / max(0.0001, atr)
+        ema_slope = (ema_9 - ema_50) / max(0.0001, atr)
+        s_trend = float(np.tanh(0.7 * dist_ema20 + 0.3 * ema_slope))
 
-        # Pilar 2: Modelo de Ising - Magnetización y Avalancha de Fase
-        # Si Chi es alta y Magnetización está alineada con el flujo -> Avalancha institucional
-        s_ising = float(snapshot.ising_magnetization * (1.0 + min(2.0, snapshot.ising_susceptibility / 2.0)))
-        s_ising = float(np.tanh(s_ising))
+        # 2. Pilar 2: Magnetización y Susceptibilidad de Fase
+        s_ising = float(np.clip(snapshot.ising_magnetization * (1.0 + min(1.5, snapshot.ising_susceptibility)), -1.0, 1.0))
 
-        # Pilar 3: Pureza Cuántica L2 y Entropía de Von Neumann
-        # Si Von Neumann es baja (estado puro), la señal es altamente determinista
+        # 3. Pilar 3: Flujo de Órdenes L2 Normalizado
         quantum_purity = max(0.1, 1.0 - snapshot.von_neumann_entropy)
-        s_quantum = float(np.tanh((snapshot.order_book_imbalance * 1.8) + (snapshot.volume_delta * 1.2))) * quantum_purity
+        obi = float(np.clip(snapshot.order_book_imbalance, -1.0, 1.0))
+        vol_delta_norm = float(np.clip(snapshot.volume_delta, -1.0, 1.0))
+        s_quantum = float(0.6 * obi + 0.4 * vol_delta_norm) * quantum_purity
 
-        # Pilar 4: Lead-Lag Alpha (Jane Street)
-        s_lead_lag = float(snapshot.lead_lag_btc_correlation * (1.0 if trend_bullish else -1.0))
+        # 4. Pilar 4: Lead-Lag Alpha Ortogonal (Correlación cruda independiente)
+        s_lead_lag = float(np.clip(snapshot.lead_lag_btc_correlation, -1.0, 1.0))
 
-        # Pilar 5: Sentimiento NLP
-        s_nlp = float(decayed_sentiment)
+        # 5. Pilar 5: Sentimiento NLP
+        s_nlp = float(np.clip(decayed_sentiment, -1.0, 1.0))
 
-        # Pesos Dinámicos
+        # Penalización Continua de Toxicidad VPIN (No salto binario)
+        vpin_penalty = max(0.0, 1.0 - (snapshot.vpin / self.vpin_cutoff)) if snapshot.vpin > 0 else 1.0
+
+        # Ponderación
         w = dynamic_weights or {
             "w_trend": 0.35,
             "w_ising": 0.25,
@@ -179,51 +170,56 @@ class TuringStrategy:
         }
         threshold = dynamic_threshold or self.signal_threshold
 
-        # Ecuación Maestra TURING
-        linear_combo = (
+        # Combinación Lineal Continua con Penalización VPIN
+        raw_score = (
             (w.get("w_trend", 0.35) * s_trend) +
             (w.get("w_ising", 0.25) * s_ising) +
             (w.get("w_quantum", 0.20) * s_quantum) +
             (w.get("w_lead_lag", 0.10) * s_lead_lag) +
             (w.get("w_nlp", 0.10) * s_nlp)
-        )
-        phi_turing = math.tanh(linear_combo * 2.0)
-        conviction = float(np.clip(phi_turing, -1.0, 1.0))
+        ) * vpin_penalty
 
-        # === SELECCIÓN AUTÓNOMA DE ARQUETIPO DE OPERACIÓN Y APALANCAMIENTO ===
-        # Cálculo de Apalancamiento Dinámico (1.0x a 10.0x)
-        raw_leverage = 2.0 + (8.0 * abs(conviction) * quantum_purity * leverage_mult)
-        optimal_leverage = float(np.clip(round(raw_leverage, 1), 1.0, 10.0))
+        conviction = float(np.clip(math.tanh(raw_score * 1.5), -1.0, 1.0))
 
-        # Arquetipo de Operación
-        dist_to_ema20 = (snapshot.last_price - ema_20) / max(0.001, atr)
+        # ======================================================================
+        # GESTIÓN DE APALANCAMIENTO: Inversamente Proporcional a Volatilidad (ATR%)
+        # ======================================================================
+        # Normaliza el riesgo: a mayor volatilidad, menor apalancamiento
+        vol_adjusted_lev = self.target_risk_pct / max(0.005, atr_pct)
+        target_lev = vol_adjusted_lev * (0.5 + 0.5 * abs(conviction)) * leverage_mult
+        optimal_leverage = float(np.clip(round(target_lev, 1), 1.0, 10.0))
 
-        if snapshot.ising_susceptibility >= 1.6 and abs(snapshot.order_book_imbalance) > 0.50:
-            operation_type = "QUANTUM_AVALANCHE_SURGE"  # Máxima agresividad
-            optimal_leverage = min(10.0, optimal_leverage * 1.25)
-        elif trend_bullish and -1.0 <= dist_to_ema20 <= 0.8 and rsi_7 < 55:
-            operation_type = "SNIPER_PULLBACK"
-        elif abs(snapshot.lead_lag_btc_correlation) > 0.85 and snapshot.symbol != "BTC/USDT":
-            operation_type = "LEAD_LAG_ARBITRAGE"
+        # ======================================================================
+        # BIFURCACIÓN DE RÉGIMEN POR EXPONENTE DE HURST (H)
+        # ======================================================================
+        if hurst_val >= 0.55:
+            operation_type = "TREND_RUNNER"  # Dejar correr la tendencia completa
+            tp_mult = 3.5
+            sl_mult = 1.4
+        elif hurst_val <= 0.45:
+            operation_type = "MEAN_REVERSION_SNIPER"  # Scalping ceñido
+            tp_mult = 2.0
+            sl_mult = 1.0
         else:
-            operation_type = "MOMENTUM_BREAKOUT"
+            operation_type = "DYNAMIC_MOMENTUM"
+            tp_mult = 2.8
+            sl_mult = 1.2
 
-        # Disparadores Asimétricos (1:4.0 a 1:5.0)
         if conviction >= threshold:
             action = "BUY"
-            sl = snapshot.last_price - (1.4 * atr)
-            tp = snapshot.last_price + (3.2 * atr)
-            reason = f"👑 TURING LONG [{operation_type}] | Lev: {optimal_leverage:.1f}x | Ising: {s_ising:+.2f} | Quantum: {s_quantum:+.2f} | Conv: {conviction:+.2f}"
+            sl = snapshot.last_price - (sl_mult * atr)
+            tp = snapshot.last_price + (tp_mult * atr)
+            reason = f"👑 TURING LONG [{operation_type}] | Lev: {optimal_leverage:.1f}x (Vol-Adj) | Hurst: {hurst_val:.2f} | Conv: {conviction:+.2f}"
         elif conviction <= -threshold:
             action = "SELL"
-            sl = snapshot.last_price + (1.4 * atr)
-            tp = snapshot.last_price - (3.2 * atr)
-            reason = f"🔻 TURING SHORT [{operation_type}] | Lev: {optimal_leverage:.1f}x | Ising: {s_ising:+.2f} | Quantum: {s_quantum:+.2f} | Conv: {conviction:+.2f}"
+            sl = snapshot.last_price + (sl_mult * atr)
+            tp = snapshot.last_price - (tp_mult * atr)
+            reason = f"🔻 TURING SHORT [{operation_type}] | Lev: {optimal_leverage:.1f}x (Vol-Adj) | Hurst: {hurst_val:.2f} | Conv: {conviction:+.2f}"
         else:
             action = "HOLD"
-            sl = snapshot.last_price - (1.4 * atr)
-            tp = snapshot.last_price + (3.2 * atr)
-            reason = f"⏸️ TURING Escaneando Campo Cuántico (Conv: {conviction:+.2f} vs Umbral: {threshold:.2f})"
+            sl = snapshot.last_price - (sl_mult * atr)
+            tp = snapshot.last_price + (tp_mult * atr)
+            reason = f"⏸️ TURING Escaneando Régimen (Hurst: {hurst_val:.2f} | Conv: {conviction:+.2f} vs {threshold:.2f})"
 
         return TuringTradeSignal(
             symbol=snapshot.symbol,
@@ -236,7 +232,7 @@ class TuringStrategy:
             take_profit=tp,
             atr=atr,
             vpin=snapshot.vpin,
-            hurst=snapshot.hurst_exponent,
+            hurst=hurst_val,
             entropy=snapshot.entropy,
             ising_chi=snapshot.ising_susceptibility,
             reason=reason

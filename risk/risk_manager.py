@@ -15,7 +15,7 @@ class TuringRiskManager:
         self.initial_balance = initial_balance
         self.current_balance = initial_balance
         self.peak_equity = initial_balance
-        self.risk_per_trade_pct = 0.08
+        self.risk_per_trade_pct = 0.15
         self.max_daily_drawdown_pct = max_daily_drawdown_pct
         self.circuit_breaker_triggered = False
         self.triggered_at = 0.0

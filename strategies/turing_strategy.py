@@ -30,7 +30,7 @@ class TuringStrategy:
         self,
         lookback_window: int = 20,
         atr_window: int = 14,
-        signal_threshold: float = 0.28,
+        signal_threshold: float = 0.12,
         vpin_cutoff: float = 0.55,
         max_entropy_cutoff: float = 0.88
     ):

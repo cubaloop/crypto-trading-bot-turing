@@ -30,7 +30,7 @@ class TuringStrategy:
         self,
         lookback_window: int = 20,
         atr_window: int = 14,
-        signal_threshold: float = 0.12,
+        signal_threshold: float = 0.26,
         vpin_cutoff: float = 0.55,
         max_entropy_cutoff: float = 0.88
     ):
@@ -211,18 +211,18 @@ class TuringStrategy:
         # Disparadores Asimétricos (1:4.0 a 1:5.0)
         if conviction >= threshold:
             action = "BUY"
-            sl = snapshot.last_price - (1.6 * atr)
-            tp = snapshot.last_price + (4.8 * atr)
+            sl = snapshot.last_price - (1.4 * atr)
+            tp = snapshot.last_price + (3.2 * atr)
             reason = f"👑 TURING LONG [{operation_type}] | Lev: {optimal_leverage:.1f}x | Ising: {s_ising:+.2f} | Quantum: {s_quantum:+.2f} | Conv: {conviction:+.2f}"
         elif conviction <= -threshold:
             action = "SELL"
-            sl = snapshot.last_price + (1.6 * atr)
-            tp = snapshot.last_price - (4.8 * atr)
+            sl = snapshot.last_price + (1.4 * atr)
+            tp = snapshot.last_price - (3.2 * atr)
             reason = f"🔻 TURING SHORT [{operation_type}] | Lev: {optimal_leverage:.1f}x | Ising: {s_ising:+.2f} | Quantum: {s_quantum:+.2f} | Conv: {conviction:+.2f}"
         else:
             action = "HOLD"
-            sl = snapshot.last_price - (1.6 * atr)
-            tp = snapshot.last_price + (4.8 * atr)
+            sl = snapshot.last_price - (1.4 * atr)
+            tp = snapshot.last_price + (3.2 * atr)
             reason = f"⏸️ TURING Escaneando Campo Cuántico (Conv: {conviction:+.2f} vs Umbral: {threshold:.2f})"
 
         return TuringTradeSignal(

@@ -16,7 +16,7 @@ class TuringSettings(BaseModel):
     
     # Capital y Gestión Agresiva de Riesgo
     initial_virtual_balance: float = 10000.0
-    risk_per_trade_pct: float = 0.25  # 2.5% base escalable hasta 5.0% según convicción
+    risk_per_trade_pct: float = 0.50  # CAPITAL CONCENTRADO MÁXIMO (50%)
     max_daily_drawdown_pct: float = 0.12  # 12.0% Max DD diario
     
     # Apalancamiento Dinámico Autónomo (1x a 10x)

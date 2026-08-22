@@ -25,7 +25,7 @@ from data.ws_market_stream import TuringMarketStream
 from data.keep_alive import KeepAliveMesh
 from sentiment.cryptopanic_streamer import TuringNewsStreamer
 from sentiment.nlp_analyzer import TuringSentimentAnalyzer
-from strategies.turing_strategy import TuringStrategy
+from strategies.turing_strategy_v2 import TuringStrategyV2 as TuringStrategy
 from ai.meta_learner import TuringMetaLearner
 from ai.episodic_memory import EpisodicMemoryEngine, MarketVector
 from risk.risk_manager import TuringRiskManager

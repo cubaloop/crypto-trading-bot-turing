@@ -133,6 +133,10 @@ class TuringStrategyV2:
         ohlcv_df: pd.DataFrame,
         decayed_sentiment: float = 0.0,
         external_alert: Optional[ExternalMarketAlert] = None,
+        dynamic_weights: Optional[Dict[str, float]] = None,
+        dynamic_threshold: Optional[float] = None,
+        leverage_mult: float = 1.0,
+        has_black_swan: bool = False
     ) -> TuringTradeSignal:
 
         df = self.compute_indicators(ohlcv_df)

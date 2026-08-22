@@ -81,11 +81,11 @@ class BinanceTestnetExecutorTuring:
                 pass
 
             # 2. Control de Margen Aislado Seguro (Máximo $800 USDT notional por trade)
-            max_safe_notional = min(2500.0, self.balance_usd * (lev * 0.15))
+            max_safe_notional = 3000.0
             if (units * signal.entry_price) > max_safe_notional:
-                units = max_safe_notional / signal.entry_price
+                units = max(25.0, max_safe_notional / signal.entry_price)
 
-            amount_formatted = round(units, 1)
+            amount_formatted = round(max(25.0, units), 1)
             if amount_formatted <= 0:
                 return None
 
